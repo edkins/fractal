@@ -1,14 +1,13 @@
 (module
     (import "console" "put_image" (func $put_image (param i32 i32 i32)))
-    (import "console" "blah" (func $blah))
     (import "js" "mem" (memory 16))
-    (func (export "abc") (result i32)
+    (func (export "abc") (param $scalex f64) (param $scaley f64) (param $offsetx f64) (param $offsety f64)
         (local $x i32)
         (local $y i32)
-        (local $zx f32)
-        (local $zy f32)
-        (local $cx f32)
-        (local $cy f32)
+        (local $zx f64)
+        (local $zy f64)
+        (local $cx f64)
+        (local $cy f64)
         (local $it i32)
         i32.const 0
         set_local $y
@@ -19,24 +18,24 @@
                 block $xblock
                     loop $xloop
                         get_local $x
-                        f32.convert_i32_u
-                        f32.const 0.0078125
-                        f32.mul
-                        f32.const -2
-                        f32.add
+                        f64.convert_i32_u
+                        get_local $scalex
+                        f64.mul
+                        get_local $offsetx
+                        f64.add
                         set_local $cx
 
                         get_local $y
-                        f32.convert_i32_u
-                        f32.const 0.0078125
-                        f32.mul
-                        f32.const -2
-                        f32.add
+                        f64.convert_i32_u
+                        get_local $scaley
+                        f64.mul
+                        get_local $offsety
+                        f64.add
                         set_local $cy
 
-                        f32.const 0
+                        f64.const 0
                         set_local $zx
-                        f32.const 0
+                        f64.const 0
                         set_local $zy
                         i32.const 0
                         set_local $it
@@ -45,34 +44,34 @@
                             loop $iloop
                                 get_local $zx
                                 get_local $zx
-                                f32.mul
+                                f64.mul
                                 get_local $zy
                                 get_local $zy
-                                f32.mul
-                                f32.sub
+                                f64.mul
+                                f64.sub
                                 get_local $cx
-                                f32.add
+                                f64.add
                                 
                                 get_local $zx
                                 get_local $zy
-                                f32.mul
-                                f32.const 2
-                                f32.mul
+                                f64.mul
+                                f64.const 2
+                                f64.mul
                                 get_local $cy
-                                f32.add
+                                f64.add
                                 
                                 set_local $zy
                                 set_local $zx
 
                                 get_local $zx
                                 get_local $zx
-                                f32.mul
+                                f64.mul
                                 get_local $zy
                                 get_local $zy
-                                f32.mul
-                                f32.add
-                                f32.const 4
-                                f32.gt
+                                f64.mul
+                                f64.add
+                                f64.const 4
+                                f64.gt
                                 br_if $iblock
                             
                                 get_local $it
@@ -81,7 +80,7 @@
                                 set_local $it
                                 
                                 get_local $it
-                                i32.const 512
+                                i32.const 5120
                                 i32.eq
                                 br_if $iblock
                                 br $iloop
@@ -130,7 +129,5 @@
         i32.const 512
         i32.const 512
         call $put_image
-        get_local $x
-        return
     )
 )

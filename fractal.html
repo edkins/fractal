@@ -3,27 +3,44 @@
 <meta charset="utf-8">
 <script>
 
+let scalex = 1/128;
+let scaley = 1/128;
+let offsetx = -2;
+let offsety = -2;
+let memory = undefined;
+let instance = undefined;
+
+function put_image(offset, width, height) {
+    let bytes = new Uint8ClampedArray(memory.buffer, offset, 4 * width * height);
+    let image_data = new ImageData(bytes, width, height);
+    let canvas = document.getElementById('canvas');
+    let ctx = canvas.getContext('2d');
+    ctx.putImageData(image_data, 0, 0);
+};
+
+function draw() {
+    instance.exports.abc(scalex, scaley, offsetx, offsety);
+}
+
 function main() {
-    let memory = new WebAssembly.Memory({initial:16});
+    memory = new WebAssembly.Memory({initial:16});
 
-    let put_image = (offset, width, height) => {
-        let bytes = new Uint8ClampedArray(memory.buffer, offset, 4 * width * height);
-        let image_data = new ImageData(bytes, width, height);
-        let canvas = document.getElementById('canvas');
-        let ctx = canvas.getContext('2d');
-        ctx.putImageData(image_data, 0, 0);
-    };
-
-    let blah = () => console.log('blah');
-
-    let importObject = {console: {put_image: put_image, blah:blah}, js: {mem: memory}};
+    let importObject = {console: {put_image: put_image}, js: {mem: memory}};
 
     WebAssembly.instantiateStreaming(fetch('fractal.wasm'), importObject).then(results => {
-
-        let abc = results.instance.exports.abc;
-        console.log(abc());
-
+        instance = results.instance;
+        draw();
     });
+}
+
+function mousedown(event) {
+    let x = event.offsetX * scalex + offsetx;
+    let y = event.offsetY * scaley + offsety;
+    scalex /= 10;
+    scaley /= 10;
+    offsetx = x - 256 * scalex;
+    offsety = y - 256 * scaley;
+    draw();
 }
 
 window.onload = main;
@@ -31,7 +48,7 @@ window.onload = main;
 </script>
 </head>
 <body>
-    <canvas width="512" height="512" id="canvas">
+    <canvas width="512" height="512" id="canvas" onmousedown="mousedown(event)">
     </canvas>
 </body>
 </html>
