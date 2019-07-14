@@ -1,0 +1,38 @@
+<html>
+<head>
+<meta charset="utf-8">
+<script>
+
+function main() {
+    let memory = new WebAssembly.Memory({initial:16});
+
+    let put_image = (offset, width, height) => {
+        let bytes = new Uint8ClampedArray(memory.buffer, offset, 4 * width * height);
+        let image_data = new ImageData(bytes, width, height);
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d');
+        ctx.putImageData(image_data, 0, 0);
+    };
+
+    let blah = () => console.log('blah');
+
+    let importObject = {console: {put_image: put_image, blah:blah}, js: {mem: memory}};
+
+    WebAssembly.instantiateStreaming(fetch('fractal.wasm'), importObject).then(results => {
+
+        let abc = results.instance.exports.abc;
+        console.log(abc());
+
+    });
+}
+
+window.onload = main;
+
+</script>
+</head>
+<body>
+    <canvas width="512" height="512" id="canvas">
+    </canvas>
+</body>
+</html>
+
