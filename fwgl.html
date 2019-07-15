@@ -31,21 +31,47 @@ function update() {
     
     let hx = 0;
     let hy = 0;
-    let escaped = false;
+    
+    let xs = [];
+    let ys = [];
+    
+    let best = 100000000;
+    let modulus = undefined;
     for (let i = 0; i < 1000; i++) {
-        let hint = gl.getUniformLocation(program,`hint[${i}]`);
-        if (escaped || hx * hx + hy * hy > 4) {
-            gl.uniform4f(hint, hx, hy, hx*hx-hy*hy+targetx, 2*hx*hy+targety);
-            hx = 0;
-            hy = 0;
-            escaped = true;
-        } else {
-            gl.uniform4f(hint, hx, hy, 0, 0);
-            let t = hx * hx - hy * hy + targetx;
-            hy = 2 * hx * hy + targety;
-            hx = t;
+        let newx = hx * hx - hy * hy + targetx;
+        let newy = 2 * hx * hy + targety;
+        
+        if (i >= 1 && hx * hx + hy * hy < best) {
+            modulus = i;
+            best = hx * hx + hy * hy;
+        }
+        
+        xs.push(hx);
+        ys.push(hy);
+        hx = newx;
+        hy = newy;
+        
+        if (hx * hx + hy * hy > 400) {
+            break;
         }
     }
+    
+    hx = 0;
+    hy = 0;
+    for (let i = 0; i < modulus; i++) {
+        let hint = gl.getUniformLocation(program,`hint[${i}]`);
+
+        let newx = hx * hx - hy * hy + targetx;
+        let newy = 2 * hx * hy + targety;
+        let actualx = xs[(i + 1) % modulus];
+        let actualy = ys[(i + 1) % modulus];
+        gl.uniform4f(hint, hx, hy, newx - actualx, newy - actualy);
+        hx = newx;
+        hy = newy;
+    }
+    
+    let umodulus = gl.getUniformLocation(program, 'modulus');
+    gl.uniform1i(umodulus, modulus);
 
     gl.uniformMatrix4fv(scale, false, [scalef,0,0,0, 0,scalef,0,0, 0,0,1,0, offsetx,offsety,0,1]);
  
@@ -66,6 +92,7 @@ function init_gl() {
     let vertex_source = `
 attribute vec2 c;
 uniform highp vec4 hint[1000];
+uniform int modulus;
 uniform mat4 scale;
 varying vec3 rgb;
 
@@ -73,12 +100,14 @@ void main() {
     gl_Position = scale * vec4(c, 0.0, 1.0);
     vec2 z = vec2(0.0, 0.0);
     rgb = vec3(0.0, 0.0, 0.0);
+    int j = 0;
     for (int i = 0; i < 1000; i++) {
         //z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
         //(h + z)^2 + d + c = (h^2 + d) + 2zh + z^2 + c
-        //= h1 + (2h + z)z + c
+        //= h1 + (2h + z)z + c + (h^2+d-h1)
         
-        vec2 h = hint[i].xy;
+        //int j = int(fract(float(i) / float(modulus)) * float(modulus));
+        vec2 h = hint[j].xy;
         if ((h.x + z.x) * (h.x + z.x) + (h.y + z.y) * (h.y + z.y) > 4.0) {
             float t = sqrt(1.0 + float(i));
             rgb = vec3(cos(t * 2.0), cos(t * 1.5), cos(t * 1.0));
@@ -86,7 +115,11 @@ void main() {
         }
         
         vec2 hz = 2.0 * h + z;
-        z = vec2(hz.x * z.x - hz.y * z.y, hz.x * z.y + hz.y * z.x) + c + hint[i].zw;
+        z = vec2(hz.x * z.x - hz.y * z.y, hz.x * z.y + hz.y * z.x) + c + hint[j].zw;
+        j += 1;
+        if (j >= modulus) {
+            j = 0;
+        }
     }
 }
 `;
