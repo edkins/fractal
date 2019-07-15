@@ -8,14 +8,17 @@ let program = undefined;
 let buffer = undefined;
 let tbuffer = undefined;
 let gl = undefined;
-let xs = 128;
-let ys = 128;
+let xs = 1024;
+let ys = 1024;
 let points = (xs + 1) * (ys + 1);
 let tris = xs * ys * 2;
 
-let offsetx = 0;
-let offsety = 0;
+let targetx = 0;
+let targety = 0;
+
 let scalef = 0.5;
+let offsetx = 0;//targetx * scalef;
+let offsety = 0;//targety * scalef;
 
 function update() {
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -25,6 +28,24 @@ function update() {
     
     let scale = gl.getUniformLocation(program,'scale');
     let c = gl.getAttribLocation(program,'c');
+    
+    let hx = 0;
+    let hy = 0;
+    let escaped = false;
+    for (let i = 0; i < 1000; i++) {
+        let hint = gl.getUniformLocation(program,`hint[${i}]`);
+        if (escaped || hx * hx + hy * hy > 4) {
+            gl.uniform4f(hint, hx, hy, hx*hx-hy*hy+targetx, 2*hx*hy+targety);
+            hx = 0;
+            hy = 0;
+            escaped = true;
+        } else {
+            gl.uniform4f(hint, hx, hy, 0, 0);
+            let t = hx * hx - hy * hy + targetx;
+            hy = 2 * hx * hy + targety;
+            hx = t;
+        }
+    }
 
     gl.uniformMatrix4fv(scale, false, [scalef,0,0,0, 0,scalef,0,0, 0,0,1,0, offsetx,offsety,0,1]);
  
@@ -34,15 +55,17 @@ function update() {
     
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tbuffer);    
     
-    gl.drawElements(gl.TRIANGLES, 3 * tris, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, 3 * tris, gl.UNSIGNED_INT, 0);
 }
 
 function init_gl() {
     let canvas = document.getElementById('canvas');
     gl = canvas.getContext('webgl');
+    var ext = gl.getExtension('OES_element_index_uint');
 
     let vertex_source = `
 attribute vec2 c;
+uniform highp vec4 hint[1000];
 uniform mat4 scale;
 varying vec3 rgb;
 
@@ -50,13 +73,20 @@ void main() {
     gl_Position = scale * vec4(c, 0.0, 1.0);
     vec2 z = vec2(0.0, 0.0);
     rgb = vec3(0.0, 0.0, 0.0);
-    for (int i = 0; i < 100; i++) {
-        z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
-        if (z.x * z.x + z.y * z.y > 4.0) {
-            float inten = fract(float(i)/10.0);
-            rgb = vec3(inten,inten,inten);
+    for (int i = 0; i < 1000; i++) {
+        //z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+        //(h + z)^2 + d + c = (h^2 + d) + 2zh + z^2 + c
+        //= h1 + (2h + z)z + c
+        
+        vec2 h = hint[i].xy;
+        if ((h.x + z.x) * (h.x + z.x) + (h.y + z.y) * (h.y + z.y) > 4.0) {
+            float t = sqrt(1.0 + float(i));
+            rgb = vec3(cos(t * 2.0), cos(t * 1.5), cos(t * 1.0));
             break;
         }
+        
+        vec2 hz = 2.0 * h + z;
+        z = vec2(hz.x * z.x - hz.y * z.y, hz.x * z.y + hz.y * z.x) + c + hint[i].zw;
     }
 }
 `;
@@ -90,7 +120,7 @@ void main() {
     gl.linkProgram(program);
 
     let c_data = new Float32Array(2 * points);
-    let t_data = new Int16Array(3 * tris);
+    let t_data = new Int32Array(3 * tris);
     for (let y = 0; y <= ys; y++) {
         for (let x = 0; x <= xs; x++) {
             let i = y * (xs + 1) + x;
@@ -126,18 +156,24 @@ function mousedown(event) {
     let canvas = document.getElementById('canvas');
     let x = event.offsetX * 2 / canvas.width - 1;
     let y = 1 - event.offsetY * 2 / canvas.height;
-    x = (x - offsetx) / scalef;
-    y = (y - offsety) / scalef;
-    scalef *= 2;
-    offsetx = -x * scalef;
-    offsety = -y * scalef;
+    let zoom = 2;
+    
+    x *= (1 - 1/zoom);
+    y *= (1 - 1/zoom);
 
+    targetx += x / scalef;
+    targety += y / scalef;
+
+    scalef *= zoom;
+    offsetx = 0;//targetx * scalef;
+    offsety = 0;//targety * scalef;
+    
     let c_data = new Float32Array(2 * points);
     for (let y = 0; y <= ys; y++) {
         for (let x = 0; x <= xs; x++) {
             let i = y * (xs + 1) + x;
-            c_data[2*i] = (2 * x / xs - 1 - offsetx) / scalef;
-            c_data[2*i+1] = (2 * y / ys - 1 - offsety) / scalef;
+            c_data[2*i] = (2 * x / xs - 1) / scalef;
+            c_data[2*i+1] = (2 * y / ys - 1) / scalef;
         }
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -154,7 +190,7 @@ window.onload = () => {
 </script>
 </head>
 <body>
-<canvas width="512" height="512" id="canvas" onmousedown="mousedown(event)">
+<canvas width="1024" height="1024" id="canvas" onmousedown="mousedown(event)">
 </canvas>
 </body>
 </html>
