@@ -1,0 +1,161 @@
+<html>
+<head>
+<meta charset="utf-8">
+<script>
+'use strict';
+
+let program = undefined;
+let buffer = undefined;
+let tbuffer = undefined;
+let gl = undefined;
+let xs = 128;
+let ys = 128;
+let points = (xs + 1) * (ys + 1);
+let tris = xs * ys * 2;
+
+let offsetx = 0;
+let offsety = 0;
+let scalef = 0.5;
+
+function update() {
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+
+    gl.useProgram(program);
+    
+    let scale = gl.getUniformLocation(program,'scale');
+    let c = gl.getAttribLocation(program,'c');
+
+    gl.uniformMatrix4fv(scale, false, [scalef,0,0,0, 0,scalef,0,0, 0,0,1,0, offsetx,offsety,0,1]);
+ 
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.vertexAttribPointer(c, 2, gl.FLOAT, false, 8, 0);
+    gl.enableVertexAttribArray(c);
+    
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tbuffer);    
+    
+    gl.drawElements(gl.TRIANGLES, 3 * tris, gl.UNSIGNED_SHORT, 0);
+}
+
+function init_gl() {
+    let canvas = document.getElementById('canvas');
+    gl = canvas.getContext('webgl');
+
+    let vertex_source = `
+attribute vec2 c;
+uniform mat4 scale;
+varying vec3 rgb;
+
+void main() {
+    gl_Position = scale * vec4(c, 0.0, 1.0);
+    vec2 z = vec2(0.0, 0.0);
+    rgb = vec3(0.0, 0.0, 0.0);
+    for (int i = 0; i < 100; i++) {
+        z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+        if (z.x * z.x + z.y * z.y > 4.0) {
+            float inten = fract(float(i)/10.0);
+            rgb = vec3(inten,inten,inten);
+            break;
+        }
+    }
+}
+`;
+
+    let fragment_source = `
+varying mediump vec3 rgb;
+void main() {
+    gl_FragColor = vec4(rgb, 1.0);
+}
+`;
+
+    let fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fragment_shader, fragment_source);
+    gl.compileShader(fragment_shader);
+    if (!gl.getShaderParameter(fragment_shader, gl.COMPILE_STATUS)) {
+        console.log(gl.getShaderInfoLog(fragment_shader));
+        throw 'Could not compile fragment shader';
+    }
+
+    let vertex_shader = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vertex_shader, vertex_source);
+    gl.compileShader(vertex_shader);
+    if (!gl.getShaderParameter(vertex_shader, gl.COMPILE_STATUS)) {
+        console.log(gl.getShaderInfoLog(vertex_shader));
+        throw 'Could not compile vertex shader';
+    }
+
+    program = gl.createProgram();
+    gl.attachShader(program, vertex_shader);
+    gl.attachShader(program, fragment_shader);
+    gl.linkProgram(program);
+
+    let c_data = new Float32Array(2 * points);
+    let t_data = new Int16Array(3 * tris);
+    for (let y = 0; y <= ys; y++) {
+        for (let x = 0; x <= xs; x++) {
+            let i = y * (xs + 1) + x;
+            c_data[2*i] = 4 * x / xs - 2;
+            c_data[2*i+1] = 4 * y / ys - 2;
+        }
+    }
+    
+    for (let y = 0; y < ys; y++) {
+        for (let x = 0; x < xs; x++) {
+            let t = y * xs + x;
+            let i = y * (xs + 1) + x;
+                        
+            t_data[6*t] = i;
+            t_data[6*t+1] = i+1;
+            t_data[6*t+2] = i+xs+1;
+            
+            t_data[6*t+3] = i+1;
+            t_data[6*t+4] = i+xs+1;
+            t_data[6*t+5] = i+xs+2;
+        }
+    }
+    buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, c_data, gl.STATIC_DRAW);
+
+    tbuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tbuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, t_data, gl.STATIC_DRAW);
+}
+
+function mousedown(event) {
+    let canvas = document.getElementById('canvas');
+    let x = event.offsetX * 2 / canvas.width - 1;
+    let y = 1 - event.offsetY * 2 / canvas.height;
+    x = (x - offsetx) / scalef;
+    y = (y - offsety) / scalef;
+    scalef *= 2;
+    offsetx = -x * scalef;
+    offsety = -y * scalef;
+
+    let c_data = new Float32Array(2 * points);
+    for (let y = 0; y <= ys; y++) {
+        for (let x = 0; x <= xs; x++) {
+            let i = y * (xs + 1) + x;
+            c_data[2*i] = (2 * x / xs - 1 - offsetx) / scalef;
+            c_data[2*i+1] = (2 * y / ys - 1 - offsety) / scalef;
+        }
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, c_data, gl.STATIC_DRAW);
+    
+    update();
+}
+
+window.onload = () => {
+    init_gl();
+    update();
+};
+
+</script>
+</head>
+<body>
+<canvas width="512" height="512" id="canvas" onmousedown="mousedown(event)">
+</canvas>
+</body>
+</html>
+
